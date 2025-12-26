@@ -1,0 +1,241 @@
+// Prisma schema for Lead Orchestrator System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Lead model - stores all incoming inquiries
+model Lead {
+  id                String   @id @default(uuid())
+  
+  // Contact Information
+  name              String
+  email             String
+  phone             String
+  
+  // Inquiry Details
+  inquiry           String   @db.Text
+  materialType      String?  @map("material_type")
+  
+  // AI Classification Results
+  persona           Persona?
+  intent            Intent?
+  leadScore         Float?   @map("lead_score")
+  
+  // Extracted Entities
+  location          String?
+  projectSize       String?  @map("project_size")
+  budget            String?
+  
+  // Enrichment Data
+  linkedinUrl       String?  @map("linkedin_url")
+  companyName       String?  @map("company_name")
+  yearsExperience   Int?     @map("years_experience")
+  
+  // Status & Routing
+  status            LeadStatus @default(NEW)
+  assignedTo        String?    @map("assigned_to")
+  priority          Priority   @default(MEDIUM)
+  
+  // Communication Tracking
+  whatsappSent      Boolean    @default(false) @map("whatsapp_sent")
+  emailSent         Boolean    @default(false) @map("email_sent")
+  lastContactedAt   DateTime?  @map("last_contacted_at")
+  
+  // Nurture Campaign
+  nurtureStage      Int        @default(0) @map("nurture_stage")
+  engagementScore   Float      @default(0) @map("engagement_score")
+  
+  // CRM Integration
+  crmId             String?    @unique @map("crm_id")
+  crmSyncedAt       DateTime?  @map("crm_synced_at")
+  
+  // Metadata
+  source            String     @default("website")
+  ipAddress         String?    @map("ip_address")
+  userAgent         String?    @map("user_agent")
+  
+  // Timestamps
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  
+  // Relations
+  interactions      Interaction[]
+  tasks             Task[]
+  
+  @@index([persona, status])
+  @@index([leadScore])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+// Interaction model - tracks all communications with leads
+model Interaction {
+  id          String           @id @default(uuid())
+  leadId      String           @map("lead_id")
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  type        InteractionType
+  channel     Channel
+  direction   Direction
+  
+  subject     String?
+  message     String           @db.Text
+  
+  status      MessageStatus    @default(SENT)
+  sentAt      DateTime?        @map("sent_at")
+  deliveredAt DateTime?        @map("delivered_at")
+  readAt      DateTime?        @map("read_at")
+  
+  metadata    Json?
+  
+  createdAt   DateTime         @default(now()) @map("created_at")
+  
+  @@index([leadId])
+  @@index([type, channel])
+  @@map("interactions")
+}
+
+// Task model - for human-in-the-loop actions
+model Task {
+  id          String      @id @default(uuid())
+  leadId      String      @map("lead_id")
+  lead        Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String      @db.Text
+  type        TaskType
+  priority    Priority    @default(MEDIUM)
+  
+  assignedTo  String?     @map("assigned_to")
+  status      TaskStatus  @default(PENDING)
+  
+  dueAt       DateTime?   @map("due_at")
+  completedAt DateTime?   @map("completed_at")
+  
+  notes       String?     @db.Text
+  
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  @@index([leadId])
+  @@index([status, priority])
+  @@index([assignedTo])
+  @@map("tasks")
+}
+
+// User model - for sales team members
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String
+  role        UserRole @default(SALES_REP)
+  
+  passwordHash String  @map("password_hash")
+  
+  isActive    Boolean  @default(true) @map("is_active")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@map("users")
+}
+
+// Enums
+enum Persona {
+  HOMEOWNER
+  ARCHITECT
+  CONTRACTOR
+  DEALER
+  UNKNOWN
+}
+
+enum Intent {
+  PRICE_INQUIRY
+  SAMPLE_REQUEST
+  TECHNICAL_SPECS
+  DESIGN_HELP
+  INSTALLATION_QUERY
+  DEALER_LOCATOR
+  COMPLAINT
+  GENERAL_INQUIRY
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  CONTACTED
+  NURTURING
+  HOT
+  CONVERTED
+  LOST
+  SPAM
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InteractionType {
+  INITIAL_RESPONSE
+  FOLLOW_UP
+  NURTURE_MESSAGE
+  TECHNICAL_INFO
+  PRICING_INFO
+  SAMPLE_CONFIRMATION
+  MEETING_SCHEDULED
+  MANUAL_OUTREACH
+}
+
+enum Channel {
+  WHATSAPP
+  EMAIL
+  SMS
+  PHONE
+  IN_PERSON
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum TaskType {
+  CALL_LEAD
+  SEND_QUOTE
+  SCHEDULE_MEETING
+  SEND_SAMPLES
+  FOLLOW_UP
+  APPROVE_DISCOUNT
+  REVIEW_LEAD
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum UserRole {
+  ADMIN
+  SALES_MANAGER
+  SALES_REP
+  SUPPORT
+}
